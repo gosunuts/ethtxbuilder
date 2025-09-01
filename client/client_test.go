@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/gosunuts/ethtxbuilder/utils"
 	"github.com/stretchr/testify/require"
 	"github.com/umbracle/ethgo"
 )
@@ -46,12 +45,11 @@ func TestClientEthMainnet(t *testing.T) {
 		require.Greater(t, bn, uint64(0), "unexpected block number", test.name)
 
 		// Balance & Nonce at latest for a well-formed EOA (doesn't need funds)
-		addr := utils.StrToAddr("0x0000000000000000000000000000000000000001")
-		bal, err := cli.BalanceAt(addr, ethgo.Latest)
+		bal, err := cli.BalanceAt("0x0000000000000000000000000000000000000001", ethgo.Latest)
 		require.NoError(t, err, "BalanceAt", test.name)
 		require.NotNil(t, bal)
 
-		_, err = cli.NonceAt(addr, ethgo.Latest)
+		_, err = cli.NonceAt("0x0000000000000000000000000000000000000001", ethgo.Latest)
 		require.NoError(t, err, "NonceAt", test.name)
 
 		gp, err := cli.SuggestGasPrice()

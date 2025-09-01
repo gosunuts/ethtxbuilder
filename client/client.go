@@ -40,13 +40,13 @@ func (c *Client) BlockByNumber(n ethgo.BlockNumber, full bool) (*ethgo.Block, er
 }
 
 // BalanceAt reads an account balance at a block (nil -> latest).
-func (c *Client) BalanceAt(addr Address, block ethgo.BlockNumberOrHash) (*big.Int, error) {
-	return c.rpc.Eth().GetBalance(addr, block)
+func (c *Client) BalanceAt(addr string, block ethgo.BlockNumberOrHash) (*big.Int, error) {
+	return c.rpc.Eth().GetBalance(ethgo.HexToAddress(addr), block)
 }
 
 // NonceAt returns the account nonce at a given block (nil -> latest).
-func (c *Client) NonceAt(addr Address, block ethgo.BlockNumberOrHash) (uint64, error) {
-	return c.rpc.Eth().GetNonce(addr, block)
+func (c *Client) NonceAt(addr string, block ethgo.BlockNumberOrHash) (uint64, error) {
+	return c.rpc.Eth().GetNonce(ethgo.HexToAddress(addr), block)
 }
 
 /* ---------- Gas/fees ---------- */
