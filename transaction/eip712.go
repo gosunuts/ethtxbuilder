@@ -166,7 +166,33 @@ func (td *TypedData) HashStruct(primary string, data map[string]any) ([]byte, er
 	return utils.Keccak(enc), nil
 }
 
+func (td *TypedData) ensureDomainType() {
+	if td.Types["EIP712Domain"] != nil {
+		return
+	}
+	var fs []Field
+	if td.Domain.Name != "" {
+		fs = append(fs, Field{"name", "string"})
+	}
+	if td.Domain.Version != "" {
+		fs = append(fs, Field{"version", "string"})
+	}
+	if td.Domain.ChainID != nil {
+		fs = append(fs, Field{"chainId", "uint256"})
+	}
+	if td.Domain.VerifyingContract != "" {
+		fs = append(fs, Field{"verifyingContract", "address"})
+	}
+	if td.Domain.Salt != "" {
+		fs = append(fs, Field{"salt", "bytes32"})
+	}
+	if len(fs) > 0 {
+		td.Types["EIP712Domain"] = fs
+	}
+}
+
 func (td *TypedData) DomainSeparator() ([]byte, error) {
+	td.ensureDomainType()
 	return (&TypedData{
 		Types:       td.Types,
 		PrimaryType: "EIP712Domain",
@@ -269,7 +295,11 @@ func (td *TypedData) encodeArray(elemType string, v any) ([]byte, error) {
 func encodePrimitive(t string, v any) ([]byte, error) {
 	switch t {
 	case "address":
-		return utils.StrToAddr(v.(string)), nil
+		// 20B -> 32B left-pad
+		addr := utils.StrToRawAddr(v.(string)) // 20 bytes
+		out := make([]byte, 32)
+		copy(out[12:], addr)
+		return out, nil
 	case "bool":
 		return utils.BoolToWord(v)
 	case "string":

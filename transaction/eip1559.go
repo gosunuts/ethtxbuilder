@@ -1,11 +1,47 @@
 package transaction
 
 import (
+	"encoding/hex"
+	"fmt"
 	"math/big"
 
 	"github.com/gosunuts/ethtxbuilder/utils"
 	"github.com/umbracle/fastrlp"
 )
+
+type AccessTuple struct {
+	Address     []byte   // 20 bytes
+	StorageKeys [][]byte // 32-byte slots
+}
+type AccessList []AccessTuple
+
+func setAccessList(ar *fastrlp.Arena, al AccessList) *fastrlp.Value {
+	l := ar.NewArray()
+	for _, t := range al {
+		it := ar.NewArray()
+		it.Set(utils.SetTo(ar, t.Address))
+		slots := ar.NewArray()
+		for _, k := range t.StorageKeys {
+			slots.Set(ar.NewBytes(k))
+		}
+		it.Set(slots)
+		l.Set(it)
+	}
+	return l
+}
+
+func NewDynamicTx(nonce uint64, to string, amount *big.Int, gasLimit uint64, maxPriorityFeePerGas, maxFeePerGas *big.Int, data []byte) *DynamicTx {
+	return &DynamicTx{
+		ChainID:              nil,
+		Nonce:                nonce,
+		MaxPriorityFeePerGas: maxPriorityFeePerGas,
+		MaxFeePerGas:         maxFeePerGas,
+		Gas:                  gasLimit,
+		To:                   utils.StrToRawAddr(to),
+		Value:                amount,
+		Data:                 data,
+	}
+}
 
 type DynamicTx struct {
 	ChainID              *big.Int
@@ -16,44 +52,92 @@ type DynamicTx struct {
 	To                   []byte // 20 bytes or nil for creation
 	Value                *big.Int
 	Data                 []byte
-	AccessList           []AccessTuple
+	Accesses             AccessList
 
-	YParity uint64 // 0 or 1  (= recID)
-	R       *big.Int
-	S       *big.Int
+	V, R, S *big.Int
+
+	rawtx []byte
 }
 
-func EncodeDynamic1559(tx *DynamicTx) []byte {
+func (t *DynamicTx) sigPayloadRLP() []byte {
 	var ar fastrlp.Arena
+	l := ar.NewArray()
+	l.Set(ar.NewBigInt(t.ChainID))
+	l.Set(ar.NewUint(t.Nonce))
+	l.Set(utils.SetBigOrZero(&ar, t.MaxPriorityFeePerGas))
+	l.Set(utils.SetBigOrZero(&ar, t.MaxFeePerGas))
+	l.Set(ar.NewUint(t.Gas))
+	l.Set(utils.SetTo(&ar, t.To))
+	l.Set(utils.SetBigOrZero(&ar, t.Value))
+	l.Set(ar.NewBytes(t.Data))
+	l.Set(setAccessList(&ar, t.Accesses))
 
-	// accessList RLP: list of [address, storageKeys[]]
-	al := ar.NewArray()
-	for _, t := range tx.AccessList {
-		elem := ar.NewArray()
-		elem.Set(ar.NewBytes(t.Address))
-		keys := ar.NewArray()
-		for _, k := range t.StorageKeys {
-			keys.Set(ar.NewBytes(k))
-		}
-		elem.Set(keys)
-		al.Set(elem)
+	payload := l.MarshalTo(nil)
+	return append([]byte{utils.DynamicFeeTxType}, payload...)
+}
+
+func (t *DynamicTx) EncodeRLP() []byte {
+	if t.rawtx != nil {
+		return t.rawtx
+	}
+	var ar fastrlp.Arena
+	l := ar.NewArray()
+	l.Set(ar.NewBigInt(t.ChainID))
+	l.Set(ar.NewUint(t.Nonce))
+	l.Set(utils.SetBigOrZero(&ar, t.MaxPriorityFeePerGas))
+	l.Set(utils.SetBigOrZero(&ar, t.MaxFeePerGas))
+	l.Set(ar.NewUint(t.Gas))
+	l.Set(utils.SetTo(&ar, t.To))
+	l.Set(utils.SetBigOrZero(&ar, t.Value))
+	l.Set(ar.NewBytes(t.Data))
+	l.Set(setAccessList(&ar, t.Accesses))
+	l.Set(utils.SetBigOrZero(&ar, t.V))
+	l.Set(utils.SetBigOrZero(&ar, t.R))
+	l.Set(utils.SetBigOrZero(&ar, t.S))
+
+	payload := l.MarshalTo(nil)
+	t.rawtx = append([]byte{utils.DynamicFeeTxType}, payload...)
+	return t.rawtx
+}
+
+func (t *DynamicTx) Sender() (string, error) {
+	if t.ChainID == nil || t.ChainID.Sign() <= 0 {
+		return "", fmt.Errorf("chainID required for 1559 sender recovery")
+	}
+	sighash := utils.Keccak(t.sigPayloadRLP())
+	v27 := new(big.Int).Add(t.V, big.NewInt(27)) // 0/1 -> 27/28
+	return utils.RecoverFrom(sighash, t.R, t.S, v27, true)
+}
+
+func (t *DynamicTx) Sign(sign utils.SignFunc) error {
+	if t.ChainID == nil || t.ChainID.Sign() <= 0 {
+		return fmt.Errorf("chainID required for 1559")
+	}
+	preimage := t.sigPayloadRLP()
+	msgHash := utils.Keccak(preimage)
+
+	sig, err := sign(msgHash)
+	if err != nil {
+		return err
+	}
+	if len(sig) != 65 {
+		return fmt.Errorf("signature must be 65 bytes, got %d", len(sig))
 	}
 
-	// signed list in order
-	l := ar.NewArray()
-	l.Set(utils.SetBigOrZero(&ar, tx.ChainID))
-	l.Set(ar.NewUint(tx.Nonce))
-	l.Set(utils.SetBigOrZero(&ar, tx.MaxPriorityFeePerGas))
-	l.Set(utils.SetBigOrZero(&ar, tx.MaxFeePerGas))
-	l.Set(ar.NewUint(tx.Gas))
-	l.Set(utils.SetTo(&ar, tx.To))
-	l.Set(utils.SetBigOrZero(&ar, tx.Value))
-	l.Set(ar.NewBytes(tx.Data))
-	l.Set(al)
-	l.Set(ar.NewUint(tx.YParity))
-	l.Set(utils.SetBigOrZero(&ar, tx.R))
-	l.Set(utils.SetBigOrZero(&ar, tx.S))
+	r := new(big.Int).SetBytes(sig[:32])
+	s := new(big.Int).SetBytes(sig[32:64])
+	y := uint64(sig[64] & 0x01)
 
-	enc := l.MarshalTo(nil)
-	return append([]byte{0x02}, enc...)
+	t.V = new(big.Int).SetUint64(y) // 0/1
+	t.R, t.S = r, s
+
+	t.rawtx = nil
+	_ = t.EncodeRLP()
+	return nil
+}
+
+func (t *DynamicTx) TxHash() string {
+	raw := t.EncodeRLP()
+	hash := utils.Keccak(raw)
+	return "0x" + hex.EncodeToString(hash)
 }

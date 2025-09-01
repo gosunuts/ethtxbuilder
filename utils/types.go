@@ -6,8 +6,6 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-
-	"github.com/umbracle/ethgo"
 )
 
 func AnyToBig(v any) (*big.Int, error) {
@@ -183,9 +181,4 @@ func EncodePrimitiveWord(typ string, v any) ([]byte, error) {
 		return IntLikeToWord(typ, v)
 	}
 	return nil, fmt.Errorf("unknown primitive type: %q", typ)
-}
-
-func StrToAddr(s string) []byte {
-	addr := ethgo.HexToAddress(s)
-	return addr[:]
 }
