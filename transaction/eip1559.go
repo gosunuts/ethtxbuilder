@@ -30,9 +30,9 @@ func setAccessList(ar *fastrlp.Arena, al AccessList) *fastrlp.Value {
 	return l
 }
 
-func NewDynamicTx(nonce uint64, to string, amount *big.Int, gasLimit uint64, maxPriorityFeePerGas, maxFeePerGas *big.Int, data []byte) *DynamicTx {
+func NewDynamicTx(chainId *big.Int, nonce uint64, to string, amount *big.Int, gasLimit uint64, maxPriorityFeePerGas, maxFeePerGas *big.Int, data []byte) *DynamicTx {
 	return &DynamicTx{
-		ChainID:              nil,
+		ChainID:              chainId,
 		Nonce:                nonce,
 		MaxPriorityFeePerGas: maxPriorityFeePerGas,
 		MaxFeePerGas:         maxFeePerGas,

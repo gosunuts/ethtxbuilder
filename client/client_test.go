@@ -8,15 +8,6 @@ import (
 	"github.com/umbracle/ethgo"
 )
 
-const (
-	EthereumMainnet = "https://ethereum-rpc.publicnode.com"
-	EthereumSepolia = "https://ethereum-sepolia-rpc.publicnode.com"
-	OptimismMainnet = "https://optimism-rpc.publicnode.com"
-	OptimismSepolia = "https://optimism-sepolia-rpc.publicnode.com"
-	ArbitrumOne     = "https://arbitrum-one-rpc.publicnode.com"
-	ArbitrumSepolia = "https://arbitrum-sepolia-rpc.publicnode.com"
-)
-
 func TestClientEthMainnet(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -30,7 +21,7 @@ func TestClientEthMainnet(t *testing.T) {
 		{"ArbitrumOne", ArbitrumOne, big.NewInt(42161)},
 		{"ArbitrumSepolia", ArbitrumSepolia, big.NewInt(421614)},
 	} {
-		cli, err := New(test.endpoint)
+		cli, err := NewClient(test.endpoint)
 		require.NoError(t, err, "New client", test.name)
 		defer cli.Close()
 

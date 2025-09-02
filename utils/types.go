@@ -57,6 +57,25 @@ func StrToU64(s string) (uint64, error) {
 	return n.Uint64(), nil
 }
 
+func StrToBig(s string) (*big.Int, error) {
+	if isHexPrefix(s) {
+		n := new(big.Int)
+		if _, ok := n.SetString(s[2:], 16); !ok {
+			return nil, fmt.Errorf("invalid hex: %s", s)
+		}
+		return n, nil
+	}
+	n := new(big.Int)
+	if _, ok := n.SetString(s, 10); !ok {
+		return nil, fmt.Errorf("invalid decimal: %s", s)
+	}
+	return n, nil
+}
+
+func U64ToBig(n uint64) *big.Int {
+	return new(big.Int).SetUint64(n)
+}
+
 func IntLikeToWord(typ string, v any) ([]byte, error) {
 	signed := strings.HasPrefix(typ, "int")
 	bi, err := AnyToBig(v)

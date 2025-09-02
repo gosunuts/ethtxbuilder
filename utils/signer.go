@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -10,6 +11,38 @@ import (
 )
 
 type SignFunc func(msgHash []byte) ([]byte, error)
+
+type Signer struct {
+	privateKey []byte
+}
+
+func NewRawPrivateSigner(privateKey string) SignFunc {
+	privkeyRaw, _ := hex.DecodeString(privateKey)
+
+	return func(msgHash []byte) ([]byte, error) {
+		privKey := secp256k1.PrivKeyFromBytes(privkeyRaw)
+
+		sig, err := Sign(msgHash, privKey)
+		if err != nil {
+			return nil, err
+		}
+		return sig, nil
+	}
+}
+
+func Sign(hash []byte, priv *secp256k1.PrivateKey) ([]byte, error) {
+	if len(hash) != 32 {
+		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
+	}
+
+	defer priv.Zero()
+	sig := ecdsa.SignCompact(priv, hash, false) // ref uncompressed pubkey
+	// Convert to Ethereum signature format with 'recovery id' v at the end.
+	v := sig[0] - 27
+	copy(sig, sig[1:])
+	sig[RecoveryIDIndex] = v
+	return sig, nil
+}
 
 const (
 	LegacyTxType     byte = 0x00

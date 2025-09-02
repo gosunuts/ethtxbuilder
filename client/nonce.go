@@ -25,6 +25,10 @@ type entry struct {
 }
 
 func NewNonceManager(c *Client, ttl time.Duration) *NonceManager {
+	if ttl <= 0 {
+		ttl = time.Minute
+	}
+
 	return &NonceManager{
 		c:     c,
 		cache: make(map[string]*entry),

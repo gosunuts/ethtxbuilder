@@ -8,16 +8,37 @@ import (
 	"github.com/umbracle/ethgo/jsonrpc"
 )
 
+const (
+	EthereumMainnet = "https://ethereum-rpc.publicnode.com"
+	EthereumSepolia = "https://ethereum-sepolia-rpc.publicnode.com"
+	OptimismMainnet = "https://optimism-rpc.publicnode.com"
+	OptimismSepolia = "https://optimism-sepolia-rpc.publicnode.com"
+	ArbitrumOne     = "https://arbitrum-one-rpc.publicnode.com"
+	ArbitrumSepolia = "https://arbitrum-sepolia-rpc.publicnode.com"
+)
+
 type Client struct {
-	rpc *jsonrpc.Client
+	rpc          *jsonrpc.Client
+	ChainId      *big.Int
+	NonceManager *NonceManager
 }
 
-func New(endpoint string) (*Client, error) {
+func NewClient(endpoint string) (*Client, error) {
 	c, err := jsonrpc.NewClient(endpoint)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{rpc: c}, nil
+	client := &Client{rpc: c}
+	nonceManager := NewNonceManager(client, 0)
+	client.NonceManager = nonceManager
+
+	chainID, err := c.Eth().ChainID()
+	if err != nil {
+		return nil, err
+	}
+	client.ChainId = chainID
+
+	return client, nil
 }
 
 func (c *Client) Close() error {
@@ -52,18 +73,22 @@ func (c *Client) NonceAt(addr string, block ethgo.BlockNumberOrHash) (uint64, er
 /* ---------- Gas/fees ---------- */
 
 // SuggestGasPrice returns the legacy gas price (pre-1559 fallback).
-func (c *Client) SuggestGasPrice() (uint64, error) {
-	return c.rpc.Eth().GasPrice()
+func (c *Client) SuggestGasPrice() (*big.Int, error) {
+	maxGasPrice, err := c.rpc.Eth().GasPrice()
+	if err != nil {
+		return nil, err
+	}
+	return utils.U64ToBig(maxGasPrice), nil
 }
 
 // SuggestGasTipCap returns the EIP-1559 priority fee per gas.
-func (c *Client) SuggestGasTipCap() (uint64, error) {
+func (c *Client) SuggestGasTipCap() (*big.Int, error) {
 	var out string
 	// Not all nodes support eth_maxPriorityFeePerGas, so handle fallback outside.
 	if err := c.rpc.Call("eth_maxPriorityFeePerGas", &out); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return utils.StrToU64(out)
+	return utils.StrToBig(out)
 }
 
 // FeeHistory returns EIP-1559 fee history.
